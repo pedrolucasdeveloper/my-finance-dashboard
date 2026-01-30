@@ -1,0 +1,37 @@
+{
+  "transactions": [
+    {
+      "id": "1",
+      "type": "income",
+      "amount": 3500,
+      "category": "Educação",
+      "description": "Bolsa de estudos",
+      "date": "2026-01-15"
+    },
+    {
+      "id": "2",
+      "type": "expense",
+      "amount": 450,
+      "category": "Alimentação",
+      "description": "Compras do mês",
+      "date": "2026-01-20"
+    },
+    {
+      "id": "3",
+      "type": "expense",
+      "amount": 120,
+      "category": "Transporte",
+      "description": "Passagem de ônibus",
+      "date": "2026-01-22"
+    },
+    {
+      "id": "4",
+      "type": "expense",
+      "amount": 200,
+      "category": "Lazer",
+      "description": "Cinema e jantar",
+      "date": "2026-01-25"
+    }
+  ],
+  "budgets": []
+}
