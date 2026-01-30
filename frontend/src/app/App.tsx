@@ -34,66 +34,43 @@ function App() {
   const [editingTransaction, setEditingTransaction] = useState<Transaction | undefined>();
   const [dismissedAlerts, setDismissedAlerts] = useState<Set<string>>(new Set());
   const [chartType, setChartType] = useState<'pie' | 'bar'>('pie');
+  const API_BASE = (import.meta as any).env.VITE_API_BASE || 'http://localhost:5000';
 
-  // Load data from localStorage on mount
+  // Load data from backend API on mount
   useEffect(() => {
-    const savedTransactions = localStorage.getItem('transactions');
-    const savedBudgets = localStorage.getItem('budgets');
+    async function load() {
+      try {
+        const [tRes, bRes] = await Promise.all([
+          fetch(`${API_BASE}/api/transactions`),
+          fetch(`${API_BASE}/api/budgets`),
+        ]);
 
-    if (savedTransactions) {
-      setTransactions(JSON.parse(savedTransactions));
-    } else {
-      // Add some sample data for demonstration
-      const sampleTransactions: Transaction[] = [
-        {
-          id: '1',
-          type: 'income',
-          amount: 3500,
-          category: 'Educação',
-          description: 'Bolsa de estudos',
-          date: '2026-01-15',
-        },
-        {
-          id: '2',
-          type: 'expense',
-          amount: 450,
-          category: 'Alimentação',
-          description: 'Compras do mês',
-          date: '2026-01-20',
-        },
-        {
-          id: '3',
-          type: 'expense',
-          amount: 120,
-          category: 'Transporte',
-          description: 'Passagem de ônibus',
-          date: '2026-01-22',
-        },
-        {
-          id: '4',
-          type: 'expense',
-          amount: 200,
-          category: 'Lazer',
-          description: 'Cinema e jantar',
-          date: '2026-01-25',
-        },
-      ];
-      setTransactions(sampleTransactions);
+        if (tRes.ok) {
+          setTransactions(await tRes.json());
+        } else {
+          setTransactions([]);
+        }
+
+        if (bRes.ok) {
+          setBudgets(await bRes.json());
+        }
+      } catch (err) {
+        // fallback sample data if API unreachable
+        const sampleTransactions: Transaction[] = [
+          { id: '1', type: 'income', amount: 3500, category: 'Educação', description: 'Bolsa de estudos', date: '2026-01-15' },
+          { id: '2', type: 'expense', amount: 450, category: 'Alimentação', description: 'Compras do mês', date: '2026-01-20' },
+          { id: '3', type: 'expense', amount: 120, category: 'Transporte', description: 'Passagem de ônibus', date: '2026-01-22' },
+          { id: '4', type: 'expense', amount: 200, category: 'Lazer', description: 'Cinema e jantar', date: '2026-01-25' },
+        ];
+        setTransactions(sampleTransactions);
+      }
     }
 
-    if (savedBudgets) {
-      setBudgets(JSON.parse(savedBudgets));
-    }
-  }, []);
+    load();
+  }, [API_BASE]);
 
-  // Save to localStorage whenever transactions or budgets change
-  useEffect(() => {
-    localStorage.setItem('transactions', JSON.stringify(transactions));
-  }, [transactions]);
-
-  useEffect(() => {
-    localStorage.setItem('budgets', JSON.stringify(budgets));
-  }, [budgets]);
+  // Persist changes to backend when transactions or budgets change is handled
+  // by the respective handlers (create/update/delete). No localStorage here.
 
   // Calculate totals
   const { totalIncome, totalExpenses, balance, expensesByCategory } = useMemo(() => {
@@ -165,20 +142,34 @@ function App() {
     })
     .sort((a, b) => b.gasto - a.gasto);
 
-  const handleSaveTransaction = (transactionData: Omit<Transaction, 'id'>) => {
-    if (editingTransaction) {
-      setTransactions((prev) =>
-        prev.map((t) =>
-          t.id === editingTransaction.id ? { ...transactionData, id: t.id } : t
-        )
-      );
-      setEditingTransaction(undefined);
-    } else {
-      const newTransaction: Transaction = {
-        ...transactionData,
-        id: Date.now().toString(),
-      };
-      setTransactions((prev) => [...prev, newTransaction]);
+  const handleSaveTransaction = async (transactionData: Omit<Transaction, 'id'>) => {
+    try {
+      if (editingTransaction) {
+        const res = await fetch(`${API_BASE}/api/transactions/${editingTransaction.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(transactionData),
+        });
+        if (res.ok) {
+          const updated = await res.json();
+          setTransactions((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+        }
+        setEditingTransaction(undefined);
+      } else {
+        const res = await fetch(`${API_BASE}/api/transactions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(transactionData),
+        });
+        if (res.ok) {
+          const created = await res.json();
+          setTransactions((prev) => [...prev, created]);
+        }
+      }
+    } catch (err) {
+      console.error('Erro ao salvar transação', err);
+    } finally {
+      setIsDialogOpen(false);
     }
   };
 
@@ -187,8 +178,15 @@ function App() {
     setIsDialogOpen(true);
   };
 
-  const handleDeleteTransaction = (id: string) => {
-    setTransactions((prev) => prev.filter((t) => t.id !== id));
+  const handleDeleteTransaction = async (id: string) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/transactions/${id}`, { method: 'DELETE' });
+      if (res.status === 204) {
+        setTransactions((prev) => prev.filter((t) => t.id !== id));
+      }
+    } catch (err) {
+      console.error('Erro ao deletar transação', err);
+    }
   };
 
   const handleCloseDialog = () => {
@@ -382,7 +380,25 @@ function App() {
             Nova Transação
           </button>
 
-          <BudgetManager budgets={budgets} categories={CATEGORIES} onSave={setBudgets} />
+          <BudgetManager
+            budgets={budgets}
+            categories={CATEGORIES}
+            onSave={async (newBudgets: CategoryBudget[]) => {
+              try {
+                const res = await fetch(`${API_BASE}/api/budgets`, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(newBudgets),
+                });
+                if (res.ok) {
+                  const saved = await res.json();
+                  setBudgets(saved);
+                }
+              } catch (err) {
+                console.error('Erro ao salvar orçamentos', err);
+              }
+            }}
+          />
         </div>
 
         {/* Transactions Table */}
