@@ -6,6 +6,7 @@ import { TransactionDialog, type Transaction } from '@/app/components/Transactio
 import { TransactionsTable } from '@/app/components/TransactionsTable';
 import { BudgetAlerts, type BudgetAlert } from '@/app/components/BudgetAlert';
 import { BudgetManager, type CategoryBudget } from '@/app/components/BudgetManager';
+import { Navbar } from '@/app/components/Navbar';
 
 const CATEGORIES = [
   'Alimentação',
@@ -207,12 +208,8 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <Navbar />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Dashboard Financeiro</h1>
-          <p className="text-gray-600">Gerencie suas finanças de forma simples e eficiente</p>
-        </div>
 
         {/* Budget Alerts */}
         {budgetAlerts.length > 0 && (
