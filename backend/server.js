@@ -1,101 +1,158 @@
 const express = require('express');
 const cors = require('cors');
-const fs = require('fs').promises;
-const path = require('path');
+const { createClient } = require('@supabase/supabase-js');
+require('dotenv').config();
 
 const app = express();
 const port = process.env.PORT || 5000;
-const DATA_FILE = path.join(__dirname, 'data.json');
+
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+  console.error("ERRO CRÍTICO: Chaves do Supabase não encontradas!");
+}
+
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 app.use(cors());
 app.use(express.json());
 
-async function readData() {
+// --- MIDDLEWARE DE AUTENTICAÇÃO ---
+const authMiddleware = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader) {
+    console.warn(`[${new Date().toISOString()}] Bloqueado: Token não fornecido`);
+    return res.status(401).json({ error: 'Token não fornecido' });
+  }
+
+  const token = authHeader.split(' ')[1];
+
   try {
-    const txt = await fs.readFile(DATA_FILE, 'utf8');
-    return JSON.parse(txt);
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+
+    if (error || !user) {
+      console.warn(`[${new Date().toISOString()}] Bloqueado: Token inválido`);
+      return res.status(401).json({ error: 'Sessão inválida' });
+    }
+
+    // Injetamos o ID do usuário na requisição para usar nas consultas
+    req.userId = user.id;
+    console.log(`[${new Date().toISOString()}] Usuário autenticado: ${user.email}`);
+    next();
   } catch (err) {
-    return { transactions: [], budgets: [] };
+    res.status(401).json({ error: 'Falha na autenticação' });
   }
-}
+};
 
-async function writeData(data) {
-  await fs.writeFile(DATA_FILE, JSON.stringify(data, null, 2), 'utf8');
-}
+// --- TRANSACTIONS ---
 
-app.get('/', (req, res) => {
-  res.send('Servidor Backend Rodando');
+app.get('/api/transactions', authMiddleware, async (req, res) => {
+  // Filtramos pelo user_id do usuário logado
+  const { data, error } = await supabase
+    .from('transactions')
+    .select('*')
+    .eq('user_id', req.userId)
+    .order('date', { ascending: false });
+
+  if (error) return res.status(500).json(error);
+  res.json(data);
 });
 
-// Transactions
-app.get('/api/transactions', async (req, res) => {
-  const data = await readData();
-  res.json(data.transactions || []);
-});
-
-app.post('/api/transactions', async (req, res) => {
+app.post('/api/transactions', authMiddleware, async (req, res) => {
   const { type, amount, category, description, date } = req.body;
+
   if (!type || typeof amount !== 'number') {
-    return res.status(400).json({ error: 'Dados de transação inválidos' });
+    return res.status(400).json({ error: 'Dados inválidos' });
   }
 
-  const data = await readData();
-  const newTransaction = {
-    id: Date.now().toString(),
-    type,
-    amount,
-    category: category || 'Outros',
-    description: description || '',
-    date: date || new Date().toISOString().slice(0, 10),
-  };
-  data.transactions = data.transactions || [];
-  data.transactions.push(newTransaction);
-  await writeData(data);
-  res.status(201).json(newTransaction);
+  // O user_id é injetado automaticamente pelo authMiddleware
+  const { data, error } = await supabase
+    .from('transactions')
+    .insert([{ 
+      type, 
+      amount, 
+      category: category || 'Outros', 
+      description: description || '', 
+      date: date || new Date().toISOString().slice(0, 10),
+      user_id: req.userId 
+    }])
+    .select();
+
+  if (error) {
+    console.error("Erro no POST:", error.message);
+    return res.status(500).json(error);
+  }
+  res.status(201).json(data[0]);
 });
 
-app.put('/api/transactions/:id', async (req, res) => {
+app.put('/api/transactions/:id', authMiddleware, async (req, res) => {
   const { id } = req.params;
-  const payload = req.body;
-  const data = await readData();
-  const idx = (data.transactions || []).findIndex((t) => t.id === id);
-  if (idx === -1) return res.status(404).json({ error: 'Transação não encontrada' });
-  data.transactions[idx] = { ...data.transactions[idx], ...payload };
-  await writeData(data);
-  res.json(data.transactions[idx]);
+  
+  // Garantimos que o usuário só atualiza o que é dele
+  const { data, error } = await supabase
+    .from('transactions')
+    .update(req.body)
+    .eq('id', id)
+    .eq('user_id', req.userId)
+    .select();
+
+  if (error) return res.status(500).json(error);
+  res.json(data[0]);
 });
 
-app.delete('/api/transactions/:id', async (req, res) => {
+app.delete('/api/transactions/:id', authMiddleware, async (req, res) => {
   const { id } = req.params;
-  const data = await readData();
-  const before = data.transactions || [];
-  const after = before.filter((t) => t.id !== id);
-  if (after.length === before.length) return res.status(404).json({ error: 'Transação não encontrada' });
-  data.transactions = after;
-  await writeData(data);
+  
+  const { error } = await supabase
+    .from('transactions')
+    .delete()
+    .eq('id', id)
+    .eq('user_id', req.userId);
+
+  if (error) return res.status(500).json(error);
   res.status(204).end();
 });
 
-// Budgets
-app.get('/api/budgets', async (req, res) => {
-  const data = await readData();
-  res.json(data.budgets || []);
+// --- BUDGETS ---
+
+app.get('/api/budgets', authMiddleware, async (req, res) => {
+  const { data, error } = await supabase
+    .from('budgets')
+    .select('*')
+    .eq('user_id', req.userId);
+    
+  if (error) return res.status(500).json(error);
+  res.json(data);
 });
 
-app.put('/api/budgets', async (req, res) => {
-  const budgets = req.body;
-  if (!Array.isArray(budgets)) return res.status(400).json({ error: 'Orçamentos inválidos' });
-  const data = await readData();
-  data.budgets = budgets;
-  await writeData(data);
-  res.json(data.budgets);
+app.put('/api/budgets', authMiddleware, async (req, res) => {
+  // Adicionamos o user_id em cada item do array antes do upsert
+  const budgets = req.body.map(b => ({ ...b, user_id: req.userId }));
+
+  const { data, error } = await supabase
+    .from('budgets')
+    .upsert(budgets, { onConflict: 'category,user_id' }) // Conflito deve considerar usuário e categoria
+    .select();
+
+  if (error) return res.status(500).json(error);
+  res.json(data);
 });
 
-// Alerts - compute server-side alerts where spent >= 80% of budget
-app.get('/api/alerts', async (req, res) => {
-  const data = await readData();
-  const transactions = data.transactions || [];
-  const budgets = data.budgets || [];
+// --- ALERTS ---
+
+app.get('/api/alerts', authMiddleware, async (req, res) => {
+  // Buscamos apenas os dados do usuário atual para calcular os alertas
+  const { data: transactions } = await supabase
+    .from('transactions')
+    .select('*')
+    .eq('user_id', req.userId);
+    
+  const { data: budgets } = await supabase
+    .from('budgets')
+    .select('*')
+    .eq('user_id', req.userId);
 
   const expensesByCategory = transactions
     .filter((t) => t.type === 'expense')
@@ -104,24 +161,21 @@ app.get('/api/alerts', async (req, res) => {
       return acc;
     }, {});
 
-  const alerts = [];
-  budgets.forEach((budget) => {
+  const alerts = budgets.map((budget) => {
     const spent = expensesByCategory[budget.category] || 0;
     const percentage = budget.limit > 0 ? (spent / budget.limit) * 100 : 0;
-    if (percentage >= 80) {
-      alerts.push({
-        id: `${budget.category}-${Math.floor(percentage)}`,
-        category: budget.category,
-        budgetLimit: budget.limit,
-        currentSpent: spent,
-        percentage,
-      });
-    }
-  });
+    return {
+      id: `${budget.category}-${Math.floor(percentage)}`,
+      category: budget.category,
+      budgetLimit: budget.limit,
+      currentSpent: spent,
+      percentage,
+    };
+  }).filter(a => a.percentage >= 80);
 
   res.json(alerts.sort((a, b) => b.percentage - a.percentage));
 });
 
 app.listen(port, () => {
-  console.log(`Servidor Backend rodando em http://localhost:${port}`);
+  console.log(`\n🚀 Servidor com Autenticação rodando em http://localhost:${port}`);
 });
