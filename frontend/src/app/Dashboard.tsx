@@ -390,19 +390,26 @@ const handleDeleteTransaction = async (id: string) => {
             budgets={budgets}
             categories={CATEGORIES}
             onSave={async (newBudgets: CategoryBudget[]) => {
-              try {
-                const res = await fetch(`${API_BASE}/api/budgets`, {
-                  method: 'PUT',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(newBudgets),
-                });
-                if (res.ok) {
-                  const saved = await res.json();
-                  setBudgets(saved);
+              const filteredBudgets = newBudgets.filter(b => b.limit > 0);
+
+              const saveBudgetPromise = (async () => {
+                const res = await api.put('/api/budgets', filteredBudgets);
+
+                if (!res.ok) {
+                  const errorData = await res.json().catch(() => ({}));
+                  throw new Error(errorData.error || 'Erro ao salvar orçamentos');
                 }
-              } catch (err) {
-                console.error('Erro ao salvar orçamentos', err);
-              }
+
+                const saved = await res.json();
+                setBudgets(saved);
+                return saved;
+              })();
+
+              toast.promise(saveBudgetPromise, {
+                loading: 'Salvando limites...',
+                success: 'Orçamentos atualizados!',
+                error: (err) => err.message,
+              });
             }}
           />
         </div>

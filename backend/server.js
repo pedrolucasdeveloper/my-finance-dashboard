@@ -128,16 +128,31 @@ app.get('/api/budgets', authMiddleware, async (req, res) => {
 });
 
 app.put('/api/budgets', authMiddleware, async (req, res) => {
-  // Adicionamos o user_id em cada item do array antes do upsert
-  const budgets = req.body.map(b => ({ ...b, user_id: req.userId }));
+  try {
+    const budgetsToSave = req.body.map(b => {
+      const item = {
+        category: b.category,
+        limit: parseFloat(b.limit) || 0,
+        user_id: req.userId 
+      };
 
-  const { data, error } = await supabase
-    .from('budgets')
-    .upsert(budgets, { onConflict: 'category,user_id' }) // Conflito deve considerar usuário e categoria
-    .select();
+      return item;
+    });
 
-  if (error) return res.status(500).json(error);
-  res.json(data);
+    // Realizando o upsert
+    const { data, error } = await supabase
+      .from('budgets')
+      .upsert(budgetsToSave, { 
+        onConflict: 'category,user_id' 
+      })
+      .select();
+
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    console.error("Erro no upsert:", err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // --- ALERTS ---
