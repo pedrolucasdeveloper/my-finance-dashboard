@@ -38,7 +38,6 @@ function App() {
   const [editingTransaction, setEditingTransaction] = useState<Transaction | undefined>();
   const [dismissedAlerts, setDismissedAlerts] = useState<Set<string>>(new Set());
   const [chartType, setChartType] = useState<'pie' | 'bar'>('pie');
-  const API_BASE = (import.meta as any).env.VITE_API_BASE || 'http://localhost:5000';
 
 // Carregar dados
 useEffect(() => {
