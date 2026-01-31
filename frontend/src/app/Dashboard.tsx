@@ -7,7 +7,9 @@ import { TransactionsTable } from '@/app/components/TransactionsTable';
 import { BudgetAlerts, type BudgetAlert } from '@/app/components/BudgetAlert';
 import { BudgetManager, type CategoryBudget } from '@/app/components/BudgetManager';
 import { Navbar } from '@/app/components/Navbar';
+import { Footer } from '@/app/components/Footer';
 import { api } from './services/api';
+import { toast } from 'react-hot-toast';
 
 const CATEGORIES = [
   'Alimentação',
@@ -50,7 +52,7 @@ useEffect(() => {
       if (tRes.ok) setTransactions(await tRes.json());
       if (bRes.ok) setBudgets(await bRes.json());
     } catch (err) {
-      console.error("Erro ao carager dados", err);
+      console.error("Erro ao carregar dados", err);
     }
   }
   load();
@@ -58,7 +60,7 @@ useEffect(() => {
 
 // Salvar transação
 const handleSaveTransaction = async (transactionData: Omit<Transaction, 'id'>) => {
-  try {
+  const savePromise = (async () => {
     let res;
     if (editingTransaction) {
       res = await api.put(`/api/transactions/${editingTransaction.id}`, transactionData);
@@ -66,15 +68,31 @@ const handleSaveTransaction = async (transactionData: Omit<Transaction, 'id'>) =
       res = await api.post('/api/transactions', transactionData);
     }
 
-    if (res.ok) {
-      const saved = await res.json();
-      setTransactions(prev => editingTransaction 
-        ? prev.map(t => t.id === saved.id ? saved : t)
-        : [...prev, saved]
-      );
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Falha na operação');
     }
+
+    const saved = await res.json();
+    
+    setTransactions(prev => editingTransaction 
+      ? prev.map(t => t.id === saved.id ? saved : t)
+      : [saved, ...prev]
+    );
+
+    return saved;
+  })();
+
+  toast.promise(savePromise, {
+    loading: editingTransaction ? 'Atualizando...' : 'Salvando...',
+    success: editingTransaction ? 'Transação atualizada!' : 'Transação salva com sucesso!',
+    error: (err) => err.message || 'Erro ao comunicar com o servidor.',
+  });
+
+  try {
+    await savePromise;
   } catch (err) {
-    console.error("Erro ao salvar", err);
+    console.error("Erro detalhado:", err);
   } finally {
     setIsDialogOpen(false);
     setEditingTransaction(undefined);
@@ -83,14 +101,29 @@ const handleSaveTransaction = async (transactionData: Omit<Transaction, 'id'>) =
 
 // Deletar transação
 const handleDeleteTransaction = async (id: string) => {
-  const res = await api.delete(`/api/transactions/${id}`);
-  if (res.ok) {
-    setTransactions(prev => prev.filter(t => t.id !== id));
-  }
-};
+  const deletePromise = (async () => {
+    const res = await api.delete(`/api/transactions/${id}`);
 
-  // Persist changes to backend when transactions or budgets change is handled
-  // by the respective handlers (create/update/delete). No localStorage here.
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Não foi possível excluir a transação');
+    }
+
+    setTransactions(prev => prev.filter(t => t.id !== id));
+    
+    return true;
+  })();
+
+  toast.promise(deletePromise, {
+    loading: 'Excluindo transação...',
+    success: 'Transação removida com sucesso!',
+    error: (err) => err.message || 'Erro ao tentar excluir.',
+  }, {
+    error: {
+      duration: 4000,
+    }
+  });
+};
 
   // Calculate totals
   const { totalIncome, totalExpenses, balance, expensesByCategory } = useMemo(() => {
@@ -391,6 +424,7 @@ const handleDeleteTransaction = async (id: string) => {
           categories={CATEGORIES}
         />
       </div>
+      <Footer />
     </div>
   );
 }

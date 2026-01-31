@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Pencil, Trash2, Filter, ArrowUpDown } from 'lucide-react';
 import type { Transaction } from './TransactionDialog';
-
+import { toast } from 'react-hot-toast';
+import { AlertTriangle, X } from 'lucide-react';
 interface TransactionsTableProps {
   transactions: Transaction[];
   onEdit: (transaction: Transaction) => void;
@@ -54,6 +55,63 @@ export function TransactionsTable({ transactions, onEdit, onDelete, categories }
       setSortOrder('desc');
     }
   };
+  
+  const confirmDelete = (transactionId: string) => {
+  toast.custom((t) => (
+    <div
+      className={`${
+        t.visible ? 'animate-enter' : 'animate-leave'
+      } max-w-md w-full bg-white dark:bg-slate-900 shadow-2xl rounded-2xl pointer-events-auto flex ring-1 ring-black ring-opacity-5 border border-red-100 dark:border-red-900/30`}
+    >
+      <div className="flex-1 w-0 p-5">
+        <div className="flex items-start">
+          <div className="flex-shrink-0 pt-0.5">
+            <div className="p-2 bg-red-50 dark:bg-red-900/20 rounded-full">
+              <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-500" />
+            </div>
+          </div>
+          <div className="ml-4 flex-1">
+            <p className="text-sm font-bold text-gray-900 dark:text-white">
+              Excluir transação?
+            </p>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
+              Esta ação removerá permanentemente os dados. Você não poderá recuperar esta transação depois.
+            </p>
+            
+            <div className="mt-4 flex gap-3">
+              <button
+                onClick={() => {
+                  onDelete(transactionId);
+                  toast.dismiss(t.id);
+                }}
+                className="flex-1 inline-flex justify-center items-center px-3 py-2 border border-transparent text-xs font-semibold rounded-lg text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all shadow-sm"
+              >
+                Sim, excluir
+              </button>
+              <button
+                onClick={() => toast.dismiss(t.id)}
+                className="flex-1 inline-flex justify-center items-center px-3 py-2 border border-gray-200 dark:border-slate-700 text-xs font-semibold rounded-lg text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 focus:outline-none transition-all"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="flex border-l border-gray-100 dark:border-slate-800">
+        <button
+          onClick={() => toast.dismiss(t.id)}
+          className="w-full border border-transparent rounded-none rounded-r-2xl p-4 flex items-center justify-center text-sm font-medium text-gray-400 hover:text-gray-500 focus:outline-none"
+        >
+          <X className="h-5 w-5" />
+        </button>
+      </div>
+    </div>
+  ), {
+    duration: 6000,
+    position: 'top-center',
+  });
+};
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
@@ -184,11 +242,7 @@ export function TransactionsTable({ transactions, onEdit, onDelete, categories }
                       <Pencil className="w-4 h-4" />
                     </button>
                     <button
-                      onClick={() => {
-                        if (window.confirm('Tem certeza que deseja excluir esta transação?')) {
-                          onDelete(transaction.id);
-                        }
-                      }}
+                      onClick={() => confirmDelete(transaction.id)}
                       className="text-red-600 hover:text-red-800 transition-colors"
                     >
                       <Trash2 className="w-4 h-4" />
