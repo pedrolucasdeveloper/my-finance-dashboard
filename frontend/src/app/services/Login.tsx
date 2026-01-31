@@ -105,12 +105,6 @@ const Login: React.FC = () => {
               </button>
             </form>
           </div>
-
-          <div className="p-6 bg-gray-50 dark:bg-slate-800/50 border-t border-gray-100 dark:border-slate-800 text-center">
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              Não tem uma conta? <span className="text-indigo-600 font-semibold cursor-pointer hover:underline">Solicite acesso</span>
-            </p>
-          </div>
         </div>
       </div>
     </div>
