@@ -124,7 +124,7 @@ export function TransactionsTable({ transactions, onEdit, onDelete, categories }
 
           <select
             value={filterType}
-            onChange={(e) => setFilterType(e.target.value as any)}
+            onChange={(e) => setFilterType(e.target.value as 'all' | 'income' | 'expense')}
             className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="all">Todas</option>

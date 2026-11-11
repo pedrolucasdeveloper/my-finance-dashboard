@@ -41,7 +41,6 @@ export function Footer() {
               target="_blank" 
               rel="noopener noreferrer"
               className="text-gray-400 hover:text-linkedin transition-colors"
-              style={{ '--hover-color': '#0077b5' } as any}
               title="LinkedIn"
             >
               <FaLinkedin size={22} className="hover:text-[#0077b5]" />

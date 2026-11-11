@@ -39,40 +39,32 @@ function App() {
   const [dismissedAlerts, setDismissedAlerts] = useState<Set<string>>(new Set());
   const [chartType, setChartType] = useState<'pie' | 'bar'>('pie');
 
-// Carregar dados
-useEffect(() => {
-  async function load() {
-    try {
-      const [tRes, bRes] = await Promise.all([
-        api.get('/api/transactions'),
-        api.get('/api/budgets')
-      ]);
+  // Carregar dados
+  useEffect(() => {
+    async function load() {
+      try {
+        const [transactionData, budgetData] = await Promise.all([
+          api.getTransactions(),
+          api.getBudgets(),
+        ]);
 
-      if (tRes.ok) setTransactions(await tRes.json());
-      if (bRes.ok) setBudgets(await bRes.json());
-    } catch (err) {
-      console.error("Erro ao carregar dados", err);
+        setTransactions(transactionData);
+        setBudgets(budgetData);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Erro desconhecido';
+        toast.error(`Não foi possível carregar seus dados: ${message}`);
+      }
     }
-  }
-  load();
-}, []);
+
+    load();
+  }, []);
 
 // Salvar transação
 const handleSaveTransaction = async (transactionData: Omit<Transaction, 'id'>) => {
   const savePromise = (async () => {
-    let res;
-    if (editingTransaction) {
-      res = await api.put(`/api/transactions/${editingTransaction.id}`, transactionData);
-    } else {
-      res = await api.post('/api/transactions', transactionData);
-    }
-
-    if (!res.ok) {
-      const errorData = await res.json().catch(() => ({}));
-      throw new Error(errorData.error || 'Falha na operação');
-    }
-
-    const saved = await res.json();
+    const saved = editingTransaction
+      ? await api.updateTransaction(editingTransaction.id, transactionData)
+      : await api.createTransaction(transactionData);
     
     setTransactions(prev => editingTransaction 
       ? prev.map(t => t.id === saved.id ? saved : t)
@@ -101,12 +93,7 @@ const handleSaveTransaction = async (transactionData: Omit<Transaction, 'id'>) =
 // Deletar transação
 const handleDeleteTransaction = async (id: string) => {
   const deletePromise = (async () => {
-    const res = await api.delete(`/api/transactions/${id}`);
-
-    if (!res.ok) {
-      const errorData = await res.json().catch(() => ({}));
-      throw new Error(errorData.error || 'Não foi possível excluir a transação');
-    }
+    await api.deleteTransaction(id);
 
     setTransactions(prev => prev.filter(t => t.id !== id));
     
@@ -392,14 +379,7 @@ const handleDeleteTransaction = async (id: string) => {
               const filteredBudgets = newBudgets.filter(b => b.limit > 0);
 
               const saveBudgetPromise = (async () => {
-                const res = await api.put('/api/budgets', filteredBudgets);
-
-                if (!res.ok) {
-                  const errorData = await res.json().catch(() => ({}));
-                  throw new Error(errorData.error || 'Erro ao salvar orçamentos');
-                }
-
-                const saved = await res.json();
+                const saved = await api.saveBudgets(filteredBudgets);
                 setBudgets(saved);
                 return saved;
               })();
@@ -423,6 +403,7 @@ const handleDeleteTransaction = async (id: string) => {
 
         {/* Transaction Dialog */}
         <TransactionDialog
+          key={`${editingTransaction?.id ?? 'new'}-${isDialogOpen ? 'open' : 'closed'}`}
           isOpen={isDialogOpen}
           onClose={handleCloseDialog}
           onSave={handleSaveTransaction}

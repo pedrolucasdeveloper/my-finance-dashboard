@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { X, DollarSign, Tag, Calendar, AlignLeft } from 'lucide-react';
 
 export interface Transaction {
@@ -19,33 +19,25 @@ interface TransactionDialogProps {
 }
 
 export function TransactionDialog({ isOpen, onClose, onSave, transaction, categories }: TransactionDialogProps) {
-  const [formData, setFormData] = useState({
-    type: 'expense' as 'income' | 'expense',
-    amount: '',
-    category: '',
-    description: '',
-    date: new Date().toISOString().split('T')[0],
-  });
-
-  useEffect(() => {
+  const [formData, setFormData] = useState(() => {
     if (transaction) {
-      setFormData({
+      return {
         type: transaction.type,
         amount: transaction.amount.toString(),
         category: transaction.category,
         description: transaction.description,
         date: transaction.date,
-      });
-    } else {
-      setFormData({
-        type: 'expense',
-        amount: '',
-        category: '',
-        description: '',
-        date: new Date().toISOString().split('T')[0],
-      });
+      };
     }
-  }, [transaction, isOpen]);
+
+    return {
+      type: 'expense' as const,
+      amount: '',
+      category: '',
+      description: '',
+      date: new Date().toISOString().split('T')[0],
+    };
+  });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
